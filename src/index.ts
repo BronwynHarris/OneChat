@@ -1,21 +1,32 @@
+import "reflect-metadata";
 import { MikroORM } from "@mikro-orm/core";
+import express from "express";
 import { __prod__ } from "./constants";
-import { Post } from "./entities/Post";
+import config from "./mikro-orm.config";
+import {ApolloServer} from 'apollo-server-express';
+import { buildSchema } from 'type-graphql'
+import { HelloResolver } from "./resolvers/hello";
+import { PostResolver } from "./resolvers/post";
 
 const main = async () => {
-  const orm = MikroORM.init({
-    entities: [Post],
-    dbName: 'OneChat',
-    type: 'postgresql',
-    debug: !__prod__
-    // user: '',
-    // password: ''
+  const orm = await MikroORM.init(config);
+
+  await orm.getMigrator().up();
+
+  const app = express();
+
+  const apolloServer = new ApolloServer({
+    schema: await buildSchema({
+      resolvers: [HelloResolver, PostResolver],
+      validate: false
+    }),
+    context: () => ({ em: orm.em })
   });
 
-  const post = (await orm).em.create(Post, {title: 'Our first post'});
-  (await orm).em.persistAndFlush(post);
+  apolloServer.applyMiddleware({ app })
+
+  app.listen(4000, () => console.log('server starting on localhost:4000'))
+
 }
 
-main();
-
-console.log("Hello World")
+main().catch((err) => console.log(err));
